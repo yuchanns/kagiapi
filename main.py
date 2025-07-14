@@ -3,17 +3,34 @@ import logging
 import os
 
 from contextlib import asynccontextmanager
+from functools import wraps
 from typing import Annotated, Optional, TypedDict
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from playwright.async_api import ElementHandle, Page, async_playwright
 from pydantic import BaseModel
 
 
+logging_level = logging.INFO
+level = os.environ.get("LOGGING_LEVEL", "INFO").upper()
+if level == "DEBUG":
+    logging_level = logging.DEBUG
+elif level == "WARNING":
+    logging_level = logging.WARNING
+elif level == "ERROR":
+    logging_level = logging.ERROR
+elif level == "CRITICAL":
+    logging_level = logging.CRITICAL
+elif level == "NOTSET":
+    logging_level = logging.NOTSET
+elif level == "FATAL":
+    logging_level = logging.FATAL
+
+
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging_level,
     format="%(asctime)s - %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
@@ -21,6 +38,11 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    access_token = os.environ.get("ACCESS_TOKEN")
+    if not access_token:
+        raise ValueError("ACCESS_TOKEN environment variable is not set")
+    logging.debug(f"Kagi authentication with access token: {access_token}")
+    app.state.access_token = access_token
     token = os.environ.get("KAGI_TOKEN")
     if not token:
         raise ValueError("KAGI_TOKEN environment variable is not set")
@@ -74,28 +96,46 @@ async def parse_search_results(
     for result in search_results:
         title = await result.query_selector(".__sri-title")
         if not title:
-            logging.debug(f"Search result title not found, skipping...")
+            logging.debug("Search result title not found, skipping...")
             continue
         title = await title.inner_text()
         url = await result.query_selector(".__sri-url-box")
         if not url:
-            logging.debug(f"Search result URL not found, skipping...")
+            logging.debug("Search result URL not found, skipping...")
             continue
         url = await url.query_selector("a")
         if not url:
-            logging.debug(f"Search result URL link not found, skipping...")
+            logging.debug("Search result URL link not found, skipping...")
             continue
         url = await url.get_attribute("href")
         if not url:
-            logging.debug(f"Search result URL attribute not found, skipping...")
+            logging.debug("Search result URL attribute not found, skipping...")
             continue
         snippet = await result.query_selector(".__sri-desc")
         if not snippet:
-            logging.debug(f"Search result snippet not found, skipping...")
+            logging.debug("Search result snippet not found, skipping...")
             continue
         snippet = await snippet.inner_text()
         results.append({"title": title, "url": url, "snippet": snippet})
     return results
+
+
+def require_auth(func):
+    @wraps(func)
+    async def wrapper(request: Request, *args, **kwargs):
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(
+                status_code=401, detail="Missing or invalid authorization header"
+            )
+
+        token = auth_header.split(" ")[1]
+        if token != request.app.state.access_token:
+            raise HTTPException(status_code=403, detail="Invalid access token")
+
+        return await func(request, *args, **kwargs)
+
+    return wrapper
 
 
 class SearchRequest(BaseModel):
@@ -103,6 +143,7 @@ class SearchRequest(BaseModel):
 
 
 @app.get("/api/search")
+@require_auth
 async def search(query: Annotated[SearchRequest, Query()]):
     async with async_playwright() as p:
         cookies = app.state.cookies
