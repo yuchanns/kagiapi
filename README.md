@@ -19,11 +19,21 @@ A FastAPI app for searching Kagi.com via browser automation. Leverages Playwrigh
 - [Playwright](https://playwright.dev/) with browsers installed (`playwright install`)
 - Kagi API token (must be set via environment variable)
 
+## Deployment
+
+You can quickly deploy this service using Docker:
+```sh
+docker run -d --name kagiapi \
+  -e KAGI_TOKEN=your_kagi_token \
+  -p 8000:8000 \
+  ghcr.io/yuchanns/kagiapi:latest
+```
+
 ## Setup
 1. **Clone the repository:**
    ```sh
-   git clone https://github.com/yuchanns/kagiflare.git
-   cd kagiflare
+   git clone https://github.com/yuchanns/kagiapi.git
+   cd kagiapi
    ```
 2. **Install dependencies:**
    - With [PDM](https://pdm.fming.dev):
