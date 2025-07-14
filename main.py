@@ -8,6 +8,7 @@ from typing import Annotated, Optional, TypedDict
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from playwright.async_api import ElementHandle, Page, async_playwright
 from pydantic import BaseModel
 
@@ -58,6 +59,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "*"
+    ],  # Allow all origins, should be restricted to specific domains in production
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
+)
 
 
 class SearchResult(TypedDict):
@@ -144,7 +155,8 @@ class SearchRequest(BaseModel):
 
 @app.get("/api/search")
 @require_auth
-async def search(query: Annotated[SearchRequest, Query()]):
+async def search(_request: Request, query: Annotated[SearchRequest, Query()]):
+    print(111)
     async with async_playwright() as p:
         cookies = app.state.cookies
         async with await p.chromium.launch(headless=True) as browser:
