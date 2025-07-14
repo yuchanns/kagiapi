@@ -155,7 +155,7 @@ class SearchRequest(BaseModel):
 
 @app.get("/api/search")
 @require_auth
-async def search(_request: Request, query: Annotated[SearchRequest, Query()]):
+async def search(request: Request, query: Annotated[SearchRequest, Query()]):
     print(111)
     async with async_playwright() as p:
         cookies = app.state.cookies
