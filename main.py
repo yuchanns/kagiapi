@@ -3,14 +3,24 @@ import logging
 import os
 
 from contextlib import asynccontextmanager
-from functools import wraps
 from typing import Annotated, Optional, TypedDict
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from playwright.async_api import ElementHandle, Page, async_playwright
 from pydantic import BaseModel
+
+
+def verify_auth(request: Request):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401, detail="Missing or invalid authorization header"
+        )
+    token = auth_header.split(" ")[1]
+    if token != request.app.state.access_token:
+        raise HTTPException(status_code=403, detail="Invalid access token")
 
 
 logging_level = logging.INFO
@@ -131,32 +141,15 @@ async def parse_search_results(
     return results
 
 
-def require_auth(func):
-    @wraps(func)
-    async def wrapper(request: Request, *args, **kwargs):
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            raise HTTPException(
-                status_code=401, detail="Missing or invalid authorization header"
-            )
-
-        token = auth_header.split(" ")[1]
-        if token != request.app.state.access_token:
-            raise HTTPException(status_code=403, detail="Invalid access token")
-
-        return await func(request, *args, **kwargs)
-
-    return wrapper
-
-
 class SearchRequest(BaseModel):
     q: str
 
 
 @app.get("/api/search")
-@require_auth
-async def search(request: Request, query: Annotated[SearchRequest, Query()]):
-    print(111)
+async def search(
+    query: Annotated[SearchRequest, Query()],
+    _dep: None = Depends(verify_auth),
+):
     async with async_playwright() as p:
         cookies = app.state.cookies
         async with await p.chromium.launch(headless=True) as browser:
