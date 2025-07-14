@@ -18,6 +18,7 @@ A FastAPI app for searching Kagi.com via browser automation. Leverages Playwrigh
 - [PDM](https://pdm.fming.dev) or pip to install dependencies
 - [Playwright](https://playwright.dev/) with browsers installed (`playwright install`)
 - Kagi API token (must be set via environment variable)
+- API access token (`ACCESS_TOKEN`) for authenticating all API requests (set via environment variable; see Setup)
 
 ## Deployment
 
@@ -46,6 +47,7 @@ docker run -d --name kagiapi \
    ```
 4. **Set up your environment variables:**
    - `KAGI_TOKEN`: Your Kagi API token (**required**)
+   - `ACCESS_TOKEN`: **Required**. A secret token all API clients must provide. Generate one (e.g. with `openssl rand -hex 32`) and keep it private. If not set, a random token is generated on startup (for quick tests/dev only).
    - `KAGIAPI_PORT`: Port to run the service (default: 8000)
 
 5. **Run the API server:**
@@ -60,13 +62,23 @@ Once started, the service exposes:
 
 ### `GET /api/search`
 - **Query parameter:** `q` (the search query string)
-- **Example request:**
+- **Example request (`ACCESS_TOKEN` required):**
 
   ```sh
-  curl -G --data-urlencode "q=python automation" http://localhost:8000/api/search
+  curl -G \
+    -H "Authorization: Bearer <ACCESS_TOKEN>" \
+    --data-urlencode "q=python automation" \
+    http://localhost:8000/api/search
   ```
+
+- **Authentication errors:**
+  - If `Authorization` header is missing or invalid, you'll receive:
+    - `401 Unauthorized`: Missing or malformed header
+    - `403 Forbidden`: Invalid token supplied
+    - Ensure your `ACCESS_TOKEN` matches the one set on the server
+
 - **Response:**
-  ```json
+  ```jsonc
   [
     {
       "title": "Official Python Documentation",
@@ -80,6 +92,7 @@ Once started, the service exposes:
 
 ## Environment Variables
 - **KAGI_TOKEN** (required): Your Kagi search token. If not set, the server will not start.
+- **ACCESS_TOKEN** (required): A secret token clients must provide in the `Authorization: Bearer <ACCESS_TOKEN>` HTTP header for all API requests. If not set, a secure random token is generated at startup, but you must specify one in production for secure access. Requests without a valid token are rejected.
 - **KAGIAPI_PORT** (optional): Port for the API server (default: `8000`).
 
 ## Development
