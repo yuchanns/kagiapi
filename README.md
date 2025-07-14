@@ -1,5 +1,10 @@
 # KagiAPI
 
+[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://www.docker.com/)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Image Tags](https://ghcr-badge.yuchanns.xyz/yuchanns/kagiapi/tags?ignore=latest)](https://ghcr.io/yuchanns/kagiapi)
+![Image Size](https://ghcr-badge.yuchanns.xyz/yuchanns/kagiapi/size)
+
 A FastAPI app for searching Kagi.com via browser automation. Leverages Playwright to perform authenticated searches with your Kagi token, and exposes them through a REST API endpoint.
 
 ## Features
