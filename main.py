@@ -1,0 +1,116 @@
+import asyncio
+import logging
+import os
+
+from contextlib import asynccontextmanager
+from typing import Annotated, Optional, TypedDict
+from urllib.parse import urlparse
+
+from fastapi import FastAPI, Query
+from playwright.async_api import ElementHandle, Page, async_playwright
+from pydantic import BaseModel
+
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    token = os.environ.get("KAGI_TOKEN")
+    if not token:
+        raise ValueError("KAGI_TOKEN environment variable is not set")
+    # Authenticate by token
+    async with async_playwright() as p:
+        async with await p.chromium.launch(headless=True) as browser:
+            async with await browser.new_page() as page:
+                await handle_token_authentication(page, token)
+                cks = await page.context.cookies()
+                app.state.cookies = cks
+                logging.debug("Kagi authentication done.")
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+
+
+class SearchResult(TypedDict):
+    title: str
+    url: str
+    snippet: str
+
+
+async def handle_token_authentication(page: Page, token: str):
+    await page.goto(f"https://kagi.com/search?token={token}")
+    result = urlparse(page.url)
+    if result.path != "/":
+        raise ValueError("Invalid token or authentication failed")
+
+
+async def perform_search(page: Page, query: str) -> Optional[list[SearchResult]]:
+    await page.goto(f"https://kagi.com/search?q={query}")
+    for _ in range(5):
+        result = await page.query_selector(".results-box")
+        if not result:
+            logging.debug(f"Search results not found for query: {query}, retrying...")
+            await asyncio.sleep(0.5)
+            continue
+        search_results = await result.query_selector_all(".search-result")
+        if len(search_results) == 0:
+            logging.debug(f"Search results not found for query: {query}, retrying...")
+            await asyncio.sleep(0.5)
+            continue
+        return await parse_search_results(search_results)
+
+
+async def parse_search_results(
+    search_results: list[ElementHandle],
+) -> list[SearchResult]:
+    results = []
+    for result in search_results:
+        title = await result.query_selector(".__sri-title")
+        if not title:
+            logging.debug(f"Search result title not found, skipping...")
+            continue
+        title = await title.inner_text()
+        url = await result.query_selector(".__sri-url-box")
+        if not url:
+            logging.debug(f"Search result URL not found, skipping...")
+            continue
+        url = await url.query_selector("a")
+        if not url:
+            logging.debug(f"Search result URL link not found, skipping...")
+            continue
+        url = await url.get_attribute("href")
+        if not url:
+            logging.debug(f"Search result URL attribute not found, skipping...")
+            continue
+        snippet = await result.query_selector(".__sri-desc")
+        if not snippet:
+            logging.debug(f"Search result snippet not found, skipping...")
+            continue
+        snippet = await snippet.inner_text()
+        results.append({"title": title, "url": url, "snippet": snippet})
+    return results
+
+
+class SearchRequest(BaseModel):
+    q: str
+
+
+@app.get("/api/search")
+async def search(query: Annotated[SearchRequest, Query()]):
+    async with async_playwright() as p:
+        cookies = app.state.cookies
+        async with await p.chromium.launch(headless=True) as browser:
+            async with await browser.new_page() as page:
+                await page.context.add_cookies(cookies)
+                # Perform a search
+                results = await perform_search(page, query.q)
+    if not results:
+        return {}
+    return results
