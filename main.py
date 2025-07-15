@@ -9,6 +9,8 @@ from urllib.parse import urlparse
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastmcp import FastMCP
+from fastmcp.server.auth.auth import OAuthProvider
+from mcp.server.auth.provider import AccessToken
 from playwright.async_api import ElementHandle, Page, async_playwright
 from pydantic import BaseModel, Field
 
@@ -37,10 +39,53 @@ logging.basicConfig(
 )
 
 
+class AccessTokenProvider(OAuthProvider):
+    """ A simple OAuth provider that uses an access token for authentication."""
+    async def load_access_token(self, token: str):
+        if token != app.state.access_token:
+            return None
+        return AccessToken(token=token, scopes=["search"], client_id="kagi_client")
+
+    # --- Unused OAuth server methods ---
+    async def get_client(self, client_id: str):
+        raise NotImplementedError("Client management not supported")
+
+    async def register_client(self, client_info):
+        raise NotImplementedError("Client registration not supported")
+
+    async def authorize(self, client, params) -> str:
+        raise NotImplementedError("Authorization flow not supported")
+
+    async def load_authorization_code(self, client, authorization_code: str):
+        raise NotImplementedError("Authorization code flow not supported")
+
+    async def exchange_authorization_code(self, client, authorization_code):
+        raise NotImplementedError("Authorization code exchange not supported")
+
+    async def load_refresh_token(self, client, refresh_token):
+        raise NotImplementedError("Refresh token flow not supported")
+
+    async def exchange_refresh_token(
+        self,
+        client,
+        refresh_token,
+        scopes: list[str],
+    ):
+        raise NotImplementedError("Refresh token exchange not supported")
+
+    async def revoke_token(
+        self,
+        token,
+    ) -> None:
+        raise NotImplementedError("Token revocation not supported")
+
+
 def create_mcp_server(app: FastAPI):
     mcp = FastMCP.from_fastapi(app=app)
 
-    mcp_app = mcp.streamable_http_app(path="/mcp")
+    mcp.auth = AccessTokenProvider(issuer_url="https://kagi.com")
+
+    mcp_app = mcp.http_app(path="/mcp")
 
     app.mount("/tools", mcp_app)
     return mcp_app.lifespan(mcp_app)
