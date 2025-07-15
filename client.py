@@ -16,7 +16,7 @@ async def main():
     if not token:
         raise ValueError("Please set the ACCESS_TOKEN environment variable.")
     client = Client(
-        StreamableHttpTransport("http://localhost:8000/tools/mcp"),
+        StreamableHttpTransport("http://localhost:8000/mcp"),
         auth=BearerAuth(token=token),
     )
     async with client:
