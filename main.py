@@ -137,7 +137,7 @@ async def parse_search_results(
             logging.debug("Search result snippet not found, skipping...")
             continue
         snippet = await snippet.inner_text()
-        results.append({"title": title, "url": url, "snippet": snippet})
+        results.append({"title": title, "url": url, "snippet": snippet, "t": 0})
     return results
 
 
