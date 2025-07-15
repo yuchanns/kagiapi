@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 def verify_auth(request: Request):
     auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
+    if not auth_header or not auth_header.startswith("Bot "):
         raise HTTPException(
             status_code=401, detail="Missing or invalid authorization header"
         )
@@ -145,7 +145,7 @@ class SearchRequest(BaseModel):
     q: str
 
 
-@app.get("/api/search")
+@app.get("/api/v0/search")
 async def search(
     query: Annotated[SearchRequest, Query()],
     _dep: None = Depends(verify_auth),
@@ -158,5 +158,5 @@ async def search(
                 # Perform a search
                 results = await perform_search(page, query.q)
     if not results:
-        return {}
-    return results
+        return {"data": {}}
+    return {"data": results}

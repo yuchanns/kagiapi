@@ -1,17 +1,23 @@
-# KagiAPI
+# KagiAPI 🔍
 
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Image Tags](https://ghcr-badge.yuchanns.xyz/yuchanns/kagiapi/tags?ignore=latest)](https://ghcr.io/yuchanns/kagiapi)
 ![Image Size](https://ghcr-badge.yuchanns.xyz/yuchanns/kagiapi/size)
 
-A FastAPI app for searching Kagi.com via browser automation. Leverages Playwright to perform authenticated searches with your Kagi token, and exposes them through a REST API endpoint.
+A FastAPI app for searching Kagi.com via browser automation, without consuming additional API credits. Leverages Playwright to perform authenticated searches with your Kagi token, and exposes them through a REST API endpoint.
 
-## Features
+## WHY
+
+While Kagi is an excellent search engine, their API pricing can be cost-prohibitive. This app provides a way to integrate Kagi search APIs into your applications without incurring additional API costs beyond your Professional subscription.
+
+## ✨ Features
+- 💳 No additional API credits required
 - Stateless, headless Kagi search via `/api/search` endpoint
 - Playwright/Chromium browser automation for accurate search result retrieval
-- Authentication with personal Kagi token
+- 🔐 Authentication with personal Kagi token
 - Easily deployable, portable Python service
+- Compatible with Official Kagi API
 
 ## Requirements
 - Python 3.12 (see `pyproject.toml`)
@@ -20,7 +26,7 @@ A FastAPI app for searching Kagi.com via browser automation. Leverages Playwrigh
 - Kagi API token (must be set via environment variable)
 - API access token (`ACCESS_TOKEN`) for authenticating all API requests (set via environment variable; see Setup)
 
-## Deployment
+## 🚀 Deployment
 
 You can quickly deploy this service using Docker:
 ```sh
@@ -30,7 +36,7 @@ docker run -d --name kagiapi \
   ghcr.io/yuchanns/kagiapi:latest
 ```
 
-## Setup
+## 📦 Setup
 1. **Clone the repository:**
    ```sh
    git clone https://github.com/yuchanns/kagiapi.git
@@ -57,18 +63,18 @@ docker run -d --name kagiapi \
    python app.py
    ```
 
-## Usage
+## 📖 Usage
 Once started, the service exposes:
 
-### `GET /api/search`
+### `GET /api/v0/search`
 - **Query parameter:** `q` (the search query string)
 - **Example request (`ACCESS_TOKEN` required):**
 
   ```sh
   curl -G \
-    -H "Authorization: Bearer <ACCESS_TOKEN>" \
+    -H "Authorization: Bot <ACCESS_TOKEN>" \
     --data-urlencode "q=python automation" \
-    http://localhost:8000/api/search
+    http://localhost:8000/api/v0/search
   ```
 
 - **Authentication errors:**
@@ -79,20 +85,20 @@ Once started, the service exposes:
 
 - **Response:**
   ```jsonc
-  [
+  {"data":[
     {
       "title": "Official Python Documentation",
       "url": "https://docs.python.org/3/",
       "snippet": "..."
     },
     ...
-  ]
+  ]}
   ```
 - If no results, an empty object `{}` is returned.
 
 ## Environment Variables
 - **KAGI_TOKEN** (required): Your Kagi search token. If not set, the server will not start.
-- **ACCESS_TOKEN** (required): A secret token clients must provide in the `Authorization: Bearer <ACCESS_TOKEN>` HTTP header for all API requests. If not set, a secure random token is generated at startup, but you must specify one in production for secure access. Requests without a valid token are rejected.
+- **ACCESS_TOKEN** (required): A secret token clients must provide in the `Authorization: Bot <ACCESS_TOKEN>` HTTP header for all API requests. If not set, a secure random token is generated at startup, but you must specify one in production for secure access. Requests without a valid token are rejected.
 - **KAGIAPI_PORT** (optional): Port for the API server (default: `8000`).
 
 ## Development
@@ -100,9 +106,17 @@ Once started, the service exposes:
 - Formatting: `pdm run format`
 - Hot reloading: `pdm run dev` or `python app.py --reload`
 
-## License
+## ⚖️ License
 Apache 2.0. See [LICENSE](LICENSE).
 
 ## Author
 - Hanchin Hsieh ([me@yuchanns.xyz](mailto:me@yuchanns.xyz))
+
+## 🤝 Contributing
+Contributions are welcome! Feel free to:
+
+Fork the repository
+Create a new branch for your feature
+Submit a Pull Request
+Please make sure to update tests as appropriate.
 
