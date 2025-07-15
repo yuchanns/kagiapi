@@ -85,7 +85,7 @@ def create_mcp_server(app: FastAPI):
 
     mcp.auth = AccessTokenProvider(issuer_url="https://kagi.com")
 
-    mcp_app = mcp.http_app(path="/mcp")
+    mcp_app = mcp.http_app(path="/mcp", transport="streamable-http")
 
     app.mount("/tools", mcp_app)
     return mcp_app.lifespan(mcp_app)
