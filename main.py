@@ -3,24 +3,14 @@ import logging
 import os
 
 from contextlib import asynccontextmanager
-from typing import Annotated, Optional, TypedDict
+from typing import Annotated, Optional
 from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastmcp import FastMCP
 from playwright.async_api import ElementHandle, Page, async_playwright
-from pydantic import BaseModel
-
-
-def verify_auth(request: Request):
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bot "):
-        raise HTTPException(
-            status_code=401, detail="Missing or invalid authorization header"
-        )
-    token = auth_header.split(" ")[1]
-    if token != request.app.state.access_token:
-        raise HTTPException(status_code=403, detail="Invalid access token")
+from pydantic import BaseModel, Field
 
 
 logging_level = logging.INFO
@@ -47,25 +37,48 @@ logging.basicConfig(
 )
 
 
+def create_mcp_server(app: FastAPI):
+    mcp = FastMCP.from_fastapi(app=app)
+
+    mcp_app = mcp.http_app(path="/mcp")
+
+    app.mount("/tools", mcp_app)
+    return mcp_app.lifespan(mcp_app)
+
+
+def verify_auth(request: Request):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not (
+        auth_header.startswith("Bot ") or auth_header.startswith("Bearer ")
+    ):
+        raise HTTPException(
+            status_code=401, detail="Missing or invalid authorization header"
+        )
+    token = auth_header.split(" ")[1]
+    if token != request.app.state.access_token:
+        raise HTTPException(status_code=403, detail="Invalid access token")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    access_token = os.environ.get("ACCESS_TOKEN")
-    if not access_token:
-        raise ValueError("ACCESS_TOKEN environment variable is not set")
-    logging.debug(f"Kagi authentication with access token: {access_token}")
-    app.state.access_token = access_token
-    token = os.environ.get("KAGI_TOKEN")
-    if not token:
-        raise ValueError("KAGI_TOKEN environment variable is not set")
-    # Authenticate by token
-    async with async_playwright() as p:
-        async with await p.chromium.launch(headless=True) as browser:
-            async with await browser.new_page() as page:
-                await handle_token_authentication(page, token)
-                cks = await page.context.cookies()
-                app.state.cookies = cks
-                logging.debug("Kagi authentication done.")
-    yield
+    async with create_mcp_server(app):
+        access_token = os.environ.get("ACCESS_TOKEN")
+        if not access_token:
+            raise ValueError("ACCESS_TOKEN environment variable is not set")
+        logging.debug(f"Kagi authentication with access token: {access_token}")
+        app.state.access_token = access_token
+        token = os.environ.get("KAGI_TOKEN")
+        if not token:
+            raise ValueError("KAGI_TOKEN environment variable is not set")
+        # Authenticate by token
+        async with async_playwright() as p:
+            async with await p.chromium.launch(headless=True) as browser:
+                async with await browser.new_page() as page:
+                    await handle_token_authentication(page, token)
+                    cks = await page.context.cookies()
+                    app.state.cookies = cks
+                    logging.debug("Kagi authentication done.")
+        yield
 
 
 app = FastAPI(lifespan=lifespan)
@@ -81,10 +94,10 @@ app.add_middleware(
 )
 
 
-class SearchResult(TypedDict):
-    title: str
-    url: str
-    snippet: str
+class SearchResult(BaseModel):
+    title: str = Field(..., description="Title of the search result")
+    url: str = Field(..., description="URL of the search result")
+    snippet: str = Field(..., description="Snippet of the search result")
 
 
 async def handle_token_authentication(page: Page, token: str):
@@ -142,21 +155,26 @@ async def parse_search_results(
 
 
 class SearchRequest(BaseModel):
-    q: str
+    q: str = Field(..., description="Search query")
 
 
-@app.get("/api/v0/search")
-async def search(
-    query: Annotated[SearchRequest, Query()],
-    _dep: None = Depends(verify_auth),
-):
+async def _search(query: str):
     async with async_playwright() as p:
         cookies = app.state.cookies
         async with await p.chromium.launch(headless=True) as browser:
             async with await browser.new_page() as page:
                 await page.context.add_cookies(cookies)
                 # Perform a search
-                results = await perform_search(page, query.q)
+                results = await perform_search(page, query)
     if not results:
         return {"data": {}}
     return {"data": results}
+
+
+@app.get("/api/v0/search", operation_id="search", response_model=list[SearchResult])
+async def search(
+    query: Annotated[SearchRequest, Query()],
+    _dep: None = Depends(verify_auth),
+):
+    """Perform a search action"""
+    return await _search(query.q)

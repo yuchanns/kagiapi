@@ -18,6 +18,7 @@ While Kagi is an excellent search engine, their API pricing can be cost-prohibit
 - 🔐 Authentication with personal Kagi token
 - Easily deployable, portable Python service
 - Compatible with Official Kagi API
+- Out-of-the-box support for **MCP** (Model Context Protocol) based on FastMCP
 
 ## Requirements
 - Python 3.12 (see `pyproject.toml`)
@@ -95,6 +96,14 @@ Once started, the service exposes:
   ]}
   ```
 - If no results, an empty object `{}` is returned.
+
+### MCP Support
+- **Endpoint** `/tools/mcp` is the endpoint for Model Context Protocol (MCP) requests.
+- **Example request (`ACCESS_TOKEN` required):**
+
+    ```bash
+    ACCESS_TOKEN=<ACCESS_ATOKEN> pdm run python client.py
+    ```
 
 ## Environment Variables
 - **KAGI_TOKEN** (required): Your Kagi search token. If not set, the server will not start.
