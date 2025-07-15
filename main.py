@@ -40,7 +40,8 @@ logging.basicConfig(
 
 
 class AccessTokenProvider(OAuthProvider):
-    """ A simple OAuth provider that uses an access token for authentication."""
+    """A simple OAuth provider that uses an access token for authentication."""
+
     async def load_access_token(self, token: str):
         if token != app.state.access_token:
             return None
@@ -203,6 +204,10 @@ class SearchRequest(BaseModel):
     q: str = Field(..., description="Search query")
 
 
+class SearchResponse(BaseModel):
+    data: list[SearchResult] = Field(..., description="List of search results")
+
+
 async def _search(query: str):
     async with async_playwright() as p:
         cookies = app.state.cookies
@@ -212,11 +217,11 @@ async def _search(query: str):
                 # Perform a search
                 results = await perform_search(page, query)
     if not results:
-        return {"data": {}}
+        return {"data": []}
     return {"data": results}
 
 
-@app.get("/api/v0/search", operation_id="search", response_model=list[SearchResult])
+@app.get("/api/v0/search", operation_id="search", response_model=SearchResponse)
 async def search(
     query: Annotated[SearchRequest, Query()],
     _dep: None = Depends(verify_auth),
