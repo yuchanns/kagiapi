@@ -228,3 +228,47 @@ async def search(
 ):
     """Perform a search action"""
     return await _search(query.q)
+
+
+class GetTimeResponse(BaseModel):
+    time: str = Field(..., description="Current server time in ISO8601 format (UTC)")
+
+
+@app.get("/api/time", operation_id="time", response_model=GetTimeResponse)
+async def get_time():
+    """Get the current time in ISO8601 format (UTC)"""
+    import datetime
+
+    now = (
+        datetime.datetime.now(datetime.timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+    return {"time": now}
+
+
+class FetchRequest(BaseModel):
+    url: str = Field(..., description="URL to fetch page content from")
+
+
+class FetchResponse(BaseModel):
+    content: str = Field(..., description="Fetched page content in markdown format")
+
+
+@app.get("/api/fetch", operation_id="fetch", response_model=FetchResponse)
+async def fetch(
+    query: Annotated[FetchRequest, Query()], _dep: None = Depends(verify_auth)
+):
+    """Fetch page content by URL"""
+    async with async_playwright() as p:
+        async with await p.chromium.launch(headless=True) as browser:
+            async with await browser.new_page() as page:
+                await page.goto(query.url)
+                content = await page.content()
+    if not content:
+        return {"content": ""}
+
+    from markdownify import markdownify as md
+
+    return {"content": md(content, strip=["script", "style", "header", "footer"])}

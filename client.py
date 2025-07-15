@@ -31,6 +31,14 @@ async def main():
             name="search", arguments={"q": "what is mcp?"}
         )
         print(result)
+        # Call time
+        result = await client.call_tool_mcp(name="time", arguments={})
+        print(result)
+        # Call fetch
+        result = await client.call_tool_mcp(
+            name="fetch", arguments={"url": "https://kagi.com"}
+        )
+        print(result)
 
 
 asyncio.run(main())
