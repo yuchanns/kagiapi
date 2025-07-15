@@ -8,6 +8,7 @@ import os
 
 from fastmcp import Client
 from fastmcp.client.auth import BearerAuth
+from fastmcp.client.transports import StreamableHttpTransport
 
 
 async def main():
@@ -15,7 +16,7 @@ async def main():
     if not token:
         raise ValueError("Please set the ACCESS_TOKEN environment variable.")
     client = Client(
-        "http://localhost:8000/tools/mcp",
+        StreamableHttpTransport("http://localhost:8000/tools/mcp"),
         auth=BearerAuth(token=token),
     )
     async with client:

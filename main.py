@@ -40,7 +40,7 @@ logging.basicConfig(
 def create_mcp_server(app: FastAPI):
     mcp = FastMCP.from_fastapi(app=app)
 
-    mcp_app = mcp.http_app(path="/mcp")
+    mcp_app = mcp.streamable_http_app(path="/mcp")
 
     app.mount("/tools", mcp_app)
     return mcp_app.lifespan(mcp_app)
