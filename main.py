@@ -162,13 +162,13 @@ async def exception_handler(_: Request, exc: Exception):
         code = exc.status_code or HTTPStatus.INTERNAL_SERVER_ERROR
         return JSONResponse(
             status_code=code,
-            content=ExceptionResponse(error=str(exc), code=code),
+            content=ExceptionResponse(error=str(exc), code=code).model_dump(),
         )
     return JSONResponse(
         status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
         content=ExceptionResponse(
             error=str(exc), code=HTTPStatus.INTERNAL_SERVER_ERROR
-        ),
+        ).model_dump(),
     )
 
 
