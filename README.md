@@ -124,8 +124,9 @@ Apache 2.0. See [LICENSE](LICENSE).
 ## 🤝 Contributing
 Contributions are welcome! Feel free to:
 
-Fork the repository
-Create a new branch for your feature
-Submit a Pull Request
+- Fork the repository
+- Create a new branch for your feature
+- Submit a Pull Request
+
 Please make sure to update tests as appropriate.
 
