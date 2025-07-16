@@ -3,11 +3,13 @@ import logging
 import os
 
 from contextlib import asynccontextmanager
-from typing import Annotated, Optional
+from http import HTTPStatus
+from typing import Annotated, Any, Dict, Optional, Union
 from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastmcp import FastMCP
 from fastmcp.server.auth.auth import OAuthProvider
 from mcp.server.auth.provider import AccessToken
@@ -140,6 +142,36 @@ app.add_middleware(
 )
 
 
+class ExceptionResponse(BaseModel):
+    error: str = Field(..., description="Error message")
+    code: int = Field(..., description="HTTP status code")
+
+
+default_responses: Dict[Union[int, str], Dict[str, Any]] = {
+    "default": {
+        "model": ExceptionResponse,
+        "description": "An unexpected error occurred",
+    }
+}
+
+
+@app.exception_handler(Exception)
+async def exception_handler(_: Request, exc: Exception):
+    """Global exception handler"""
+    if isinstance(exc, HTTPException):
+        code = exc.status_code or HTTPStatus.INTERNAL_SERVER_ERROR
+        return JSONResponse(
+            status_code=code,
+            content=ExceptionResponse(error=str(exc), code=code),
+        )
+    return JSONResponse(
+        status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+        content=ExceptionResponse(
+            error=str(exc), code=HTTPStatus.INTERNAL_SERVER_ERROR
+        ),
+    )
+
+
 class SearchResult(BaseModel):
     title: str = Field(..., description="Title of the search result")
     url: str = Field(..., description="URL of the search result")
@@ -221,7 +253,12 @@ async def _search(query: str):
     return {"data": results}
 
 
-@app.get("/api/v0/search", operation_id="search", response_model=SearchResponse)
+@app.get(
+    "/api/v0/search",
+    operation_id="search",
+    response_model=SearchResponse,
+    responses=default_responses,
+)
 async def search(
     query: Annotated[SearchRequest, Query()],
     _dep: None = Depends(verify_auth),
@@ -234,7 +271,12 @@ class GetTimeResponse(BaseModel):
     time: str = Field(..., description="Current server time in ISO8601 format (UTC)")
 
 
-@app.get("/api/time", operation_id="time", response_model=GetTimeResponse)
+@app.get(
+    "/api/time",
+    operation_id="time",
+    response_model=GetTimeResponse,
+    responses=default_responses,
+)
 async def get_time():
     """Get the current time in ISO8601 format (UTC)"""
     import datetime
@@ -256,7 +298,12 @@ class FetchResponse(BaseModel):
     content: str = Field(..., description="Fetched page content in markdown format")
 
 
-@app.get("/api/fetch", operation_id="fetch", response_model=FetchResponse)
+@app.get(
+    "/api/fetch",
+    operation_id="fetch",
+    response_model=FetchResponse,
+    responses=default_responses,
+)
 async def fetch(
     query: Annotated[FetchRequest, Query()], _dep: None = Depends(verify_auth)
 ):
