@@ -36,7 +36,7 @@ async def main():
         print(result)
         # Call fetch
         result = await client.call_tool_mcp(
-            name="fetch", arguments={"url": ["https://kagi.com"]}
+            name="fetch", arguments={"url": "https://kagi.com"}
         )
         print(result)
 
