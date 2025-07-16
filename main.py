@@ -3,11 +3,13 @@ import logging
 import os
 
 from contextlib import asynccontextmanager
-from typing import Annotated, Optional
+from http import HTTPStatus
+from typing import Annotated, Any, Dict, Optional, Union
 from urllib.parse import urlparse
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastmcp import FastMCP
 from fastmcp.server.auth.auth import OAuthProvider
 from mcp.server.auth.provider import AccessToken
@@ -140,6 +142,36 @@ app.add_middleware(
 )
 
 
+class ExceptionResponse(BaseModel):
+    error: str = Field(..., description="Error message")
+    code: int = Field(..., description="HTTP status code")
+
+
+default_responses: Dict[Union[int, str], Dict[str, Any]] = {
+    "default": {
+        "model": ExceptionResponse,
+        "description": "An unexpected error occurred",
+    }
+}
+
+
+@app.exception_handler(Exception)
+async def exception_handler(_: Request, exc: Exception):
+    """Global exception handler"""
+    if isinstance(exc, HTTPException):
+        code = exc.status_code or HTTPStatus.INTERNAL_SERVER_ERROR
+        return JSONResponse(
+            status_code=code,
+            content=ExceptionResponse(error=str(exc), code=code),
+        )
+    return JSONResponse(
+        status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+        content=ExceptionResponse(
+            error=str(exc), code=HTTPStatus.INTERNAL_SERVER_ERROR
+        ),
+    )
+
+
 class SearchResult(BaseModel):
     title: str = Field(..., description="Title of the search result")
     url: str = Field(..., description="URL of the search result")
@@ -217,11 +249,16 @@ async def _search(query: str):
                 # Perform a search
                 results = await perform_search(page, query)
     if not results:
-        return {"data": []}
-    return {"data": results}
+        results = []
+    return SearchResponse(data=results)
 
 
-@app.get("/api/v0/search", operation_id="search", response_model=SearchResponse)
+@app.get(
+    "/api/v0/search",
+    operation_id="search",
+    response_model=SearchResponse,
+    responses=default_responses,
+)
 async def search(
     query: Annotated[SearchRequest, Query()],
     _dep: None = Depends(verify_auth),
@@ -234,7 +271,12 @@ class GetTimeResponse(BaseModel):
     time: str = Field(..., description="Current server time in ISO8601 format (UTC)")
 
 
-@app.get("/api/time", operation_id="time", response_model=GetTimeResponse)
+@app.get(
+    "/api/time",
+    operation_id="time",
+    response_model=GetTimeResponse,
+    responses=default_responses,
+)
 async def get_time():
     """Get the current time in ISO8601 format (UTC)"""
     import datetime
@@ -245,30 +287,43 @@ async def get_time():
         .isoformat()
         .replace("+00:00", "Z")
     )
-    return {"time": now}
+    return GetTimeResponse(time=now)
 
 
 class FetchRequest(BaseModel):
-    url: str = Field(..., description="URL to fetch page content from")
+    url: list[str] = Field(..., description="URLs to fetch page content from")
 
 
 class FetchResponse(BaseModel):
-    content: str = Field(..., description="Fetched page content in markdown format")
+    contents: list[str] = Field(
+        ..., description="Fetched page contents in markdown format"
+    )
 
 
-@app.get("/api/fetch", operation_id="fetch", response_model=FetchResponse)
+@app.post(
+    "/api/fetch",
+    operation_id="fetch",
+    response_model=FetchResponse,
+    responses=default_responses,
+)
 async def fetch(
-    query: Annotated[FetchRequest, Query()], _dep: None = Depends(verify_auth)
+    body: Annotated[FetchRequest, Body()], _dep: None = Depends(verify_auth)
 ):
     """Fetch page content by URL"""
-    async with async_playwright() as p:
-        async with await p.chromium.launch(headless=True) as browser:
-            async with await browser.new_page() as page:
-                await page.goto(query.url)
-                content = await page.content()
-    if not content:
-        return {"content": ""}
-
     from markdownify import markdownify as md
 
-    return {"content": md(content, strip=["script", "style", "header", "footer"])}
+    async with async_playwright() as p:
+        async with await p.chromium.launch(headless=True) as browser:
+            urls = body.url
+
+            async def fetch_url(url: str) -> str:
+                async with await browser.new_page() as page:
+                    await page.goto(url)
+                    return md(
+                        await page.content(),
+                        strip=["script", "style", "header", "footer"],
+                    )
+
+            tasks = [fetch_url(url) for url in urls]
+            contents = await asyncio.gather(*tasks)
+    return FetchResponse(contents=contents)
