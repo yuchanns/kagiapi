@@ -142,6 +142,16 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def catch_all_exceptions(request: Request, call_next):
+    """Middleware to catch all exceptions and return a JSON response"""
+    try:
+        response = await call_next(request)
+        return response
+    except Exception as exc:
+        return await exception_handler(request, exc)
+
+
 class ExceptionResponse(BaseModel):
     error: str = Field(..., description="Error message")
     code: int = Field(..., description="HTTP status code")
@@ -311,10 +321,12 @@ async def fetch(
     async with async_playwright() as p:
         async with await p.chromium.launch(headless=True) as browser:
             async with await browser.new_page() as page:
-                await page.goto(query.url)
-                content = await page.content()
-    if not content:
-        return {"content": ""}
+                try:
+                    await page.goto(query.url)
+                    content = await page.content()
+                except Exception as e:
+                    logging.error(f"Failed to fetch content from {query.url}: {e}")
+                    content = ""
 
     from markdownify import markdownify as md
 
