@@ -322,7 +322,7 @@ async def fetch(
         async with await p.chromium.launch(headless=True) as browser:
             async with await browser.new_page() as page:
                 try:
-                    await page.goto(query.url)
+                    await page.goto(query.url, timeout=5000)
                     content = await page.content()
                 except Exception as e:
                     logging.error(f"Failed to fetch content from {query.url}: {e}")
